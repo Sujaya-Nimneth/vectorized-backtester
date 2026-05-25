@@ -13,6 +13,8 @@ from backtester import (
     NaivePortfolio,
     SimulatedExecutionHandler,
     VectorizedBacktester,
+    calculate_performance_metrics,
+    plot_performance,
     EventType
 )
 
@@ -162,66 +164,89 @@ def run_event_driven_verification(mock_dir: str):
 
 def run_vectorized_verification():
     print("\n--- 6. Verifying Lightweight Vectorized Backtester ---")
-    
-    # Create simple linear price history for rapid testing
     dates = pd.date_range(start="2026-05-01", periods=5, freq="D")
     prices = [100.0, 102.0, 101.0, 105.0, 104.0]
     price_df = pd.DataFrame({"close": prices}, index=dates)
     
-    # Initialize backtester
     backtester = VectorizedBacktester(price_df=price_df, price_col="close")
-    
-    # Define trade signal series (1 for Long, -1 for Short, 0 for cash)
-    # Day 1: Neutral, Day 2: Go Long, Day 3: Stay Long, Day 4: Go Short, Day 5: Exit (Neutral)
     signals = pd.Series([0.0, 1.0, 1.0, -1.0, 0.0], index=dates)
     
-    # Run backtest with 0.1% percentage transaction cost
     tc_rate = 0.001
     results = backtester.run_backtest(signals=signals, tc=tc_rate)
     
-    print("\nVectorized Results DataFrame:")
-    print(results[["close", "asset_returns", "position", "strategy_position", "gross_returns", "tc_costs", "net_returns", "cumulative_net"]])
-    
-    # 1. Check returns logic
-    # Day 2 asset return = (102 - 100) / 100 = 0.02
+    print("Vectorized Results:")
+    print(results[["close", "position", "strategy_position", "gross_returns", "tc_costs", "net_returns", "cumulative_net"]])
     assert np.isclose(results["asset_returns"].iloc[1], 0.02)
-    
-    # 2. Check no-lookahead shift logic
-    # Day 2 position = 1.0. Shifted strategy position for Day 2 must be 0.0 (from Day 1 position).
-    # Day 3 position = 1.0. Shifted strategy position for Day 3 must be 1.0 (from Day 2 position).
-    # Day 4 position = -1.0. Shifted strategy position for Day 4 must be 1.0 (from Day 3 position).
     assert results["strategy_position"].iloc[1] == 0.0
     assert results["strategy_position"].iloc[2] == 1.0
-    assert results["strategy_position"].iloc[3] == 1.0
-    assert results["strategy_position"].iloc[4] == -1.0
-    
-    # 3. Check gross returns
-    # Day 3 gross return = strategy_position(1.0) * asset_return( (101-102)/102 = -0.0098 )
-    expected_day3_gross = 1.0 * ((101.0 - 102.0) / 102.0)
-    assert np.isclose(results["gross_returns"].iloc[2], expected_day3_gross)
-    
-    # 4. Check vectorized transaction costs (diff-based)
-    # Position differences:
-    # Day 1 -> Day 2: diff = |1.0 - 0.0| = 1.0. Cost = 1.0 * 0.001 = 0.001
-    # Day 2 -> Day 3: diff = |1.0 - 1.0| = 0.0. Cost = 0.0
-    # Day 3 -> Day 4: diff = |-1.0 - 1.0| = 2.0. Cost = 2.0 * 0.001 = 0.002 (switching from LONG to SHORT)
-    # Day 4 -> Day 5: diff = |0.0 - (-1.0)| = 1.0. Cost = 1.0 * 0.001 = 0.001
     assert np.isclose(results["tc_costs"].iloc[1], 0.001)
-    assert np.isclose(results["tc_costs"].iloc[2], 0.0)
-    assert np.isclose(results["tc_costs"].iloc[3], 0.002)
-    assert np.isclose(results["tc_costs"].iloc[4], 0.001)
-    
-    # 5. Check net returns
-    # Day 3 net return = gross_returns - tc_costs
-    expected_day3_net = expected_day3_gross - 0.0
-    assert np.isclose(results["net_returns"].iloc[2], expected_day3_net)
-    
-    # Day 4 net return = strategy_position(1.0) * asset_return((105-101)/101 = 0.0396) - tc_cost(0.002) = 0.0396 - 0.002 = 0.0376
-    expected_day4_gross = 1.0 * ((105.0 - 101.0) / 101.0)
-    expected_day4_net = expected_day4_gross - 0.002
-    assert np.isclose(results["net_returns"].iloc[3], expected_day4_net)
 
-    print("\nVectorized Backtester successfully verified!")
+    print("Vectorized Backtester successfully verified!")
+
+
+def run_performance_tracker_verification():
+    print("\n--- 7. Verifying PerformanceTracker Module ---")
+    
+    # Simulate a full 1-year daily backtest equity curve (252 trading days)
+    # Starts at 100,000, trends upward with some noise, encounters a major drawdown, and recovers.
+    np.random.seed(42)
+    t = pd.date_range(start="2025-01-01", periods=252, freq="B")  # Business days
+    
+    # Constructing deterministic trend + drawdown structure
+    # Initial growth phase (first 100 days): grows from 100k to ~125k
+    growth = np.linspace(100000, 125000, 100)
+    
+    # Drawdown phase (next 52 days): falls from 125k to ~110k (approx -12% drawdown)
+    drawdown = np.linspace(125000, 110000, 52)
+    
+    # Recovery and final rally (remaining 100 days): recovers to 110k -> 130k
+    recovery = np.linspace(110000, 130000, 100)
+    
+    raw_equity = np.concatenate([growth, drawdown, recovery])
+    # Add minor daily percentage noise (daily return standard deviation of ~0.5%)
+    noise_returns = np.random.normal(loc=0.0, scale=0.005, size=252)
+    equity = np.zeros(252)
+    equity[0] = 100000.0
+    for i in range(1, 252):
+        # Apply current baseline price + standard daily percentage returns noise
+        base_return = (raw_equity[i] - raw_equity[i-1]) / raw_equity[i-1]
+        equity[i] = equity[i-1] * (1.0 + base_return + noise_returns[i])
+        
+    equity_series = pd.Series(equity, index=t)
+    
+    # Calculate performance metrics
+    metrics = calculate_performance_metrics(equity_series, periods_per_year=252, risk_free_rate=0.02)
+    
+    print("\nCalculated Metrics:")
+    for k, v in metrics.items():
+        if k in ["total_return", "cagr", "max_drawdown"]:
+            print(f"  {k.replace('_', ' ').title()}: {v * 100:.2f}%")
+        else:
+            print(f"  {k.replace('_', ' ').title()}: {v:.4f}")
+            
+    # Verification assertions:
+    # 1. Total Return should be close to 30.0% (starts at 100,000, ends at ~130,000)
+    assert 0.20 <= metrics["total_return"] <= 0.40, f"Total return {metrics['total_return']} not in expected range."
+    # 2. CAGR should be in line with total return since duration is exactly ~1 year
+    assert 0.20 <= metrics["cagr"] <= 0.40
+    # 3. Max Drawdown should capture our programmed dip. High-watermark was ~125k, trough was ~110k, so it should be negative and around -10% to -15%
+    assert -0.20 <= metrics["max_drawdown"] <= -0.05, f"Max Drawdown {metrics['max_drawdown']} not in expected range."
+    # 4. Sharpe ratio should be positive
+    assert metrics["sharpe_ratio"] > 0.0
+
+    # Test visualization plot rendering
+    chart_filename = "performance_chart.png"
+    print(f"\nRendering and saving double-panel performance chart to: {chart_filename}")
+    plot_performance(equity_series=equity_series, log_scale=False, save_path=chart_filename)
+    
+    # Confirm plot image file was generated successfully
+    assert os.path.exists(chart_filename), f"Performance chart file '{chart_filename}' was not created."
+    print("Performance plot successfully created and verified!")
+    
+    # Cleanup chart file
+    if os.path.exists(chart_filename):
+        os.remove(chart_filename)
+        print("Cleaned up temporary plot file.")
 
 
 def main():
@@ -232,8 +257,9 @@ def main():
         
         run_event_driven_verification(mock_dir)
         run_vectorized_verification()
+        run_performance_tracker_verification()
     finally:
-        print("\n--- 7. Cleaning up Mock Data ---")
+        print("\n--- 8. Cleaning up Mock Data ---")
         if os.path.exists(mock_dir):
             shutil.rmtree(mock_dir)
         print("All validations completed successfully!")

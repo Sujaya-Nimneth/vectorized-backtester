@@ -11,6 +11,7 @@ from .strategy import Strategy
 from .portfolio import Portfolio, NaivePortfolio
 from .execution import ExecutionHandler, SimulatedExecutionHandler
 from .vectorized import VectorizedBacktester
+from .performance import calculate_performance_metrics, plot_performance
 
 __all__ = [
     "Event",
@@ -27,6 +28,9 @@ __all__ = [
     "ExecutionHandler",
     "SimulatedExecutionHandler",
     "VectorizedBacktester",
+    "calculate_performance_metrics",
+    "plot_performance",
 ]
+
 
 
