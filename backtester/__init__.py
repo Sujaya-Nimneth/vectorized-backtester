@@ -10,6 +10,7 @@ from .data import DataHandler, HistoricCSVDataHandler
 from .strategy import Strategy
 from .portfolio import Portfolio, NaivePortfolio
 from .execution import ExecutionHandler, SimulatedExecutionHandler
+from .vectorized import VectorizedBacktester
 
 __all__ = [
     "Event",
@@ -25,5 +26,7 @@ __all__ = [
     "NaivePortfolio",
     "ExecutionHandler",
     "SimulatedExecutionHandler",
+    "VectorizedBacktester",
 ]
+
 
