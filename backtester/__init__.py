@@ -8,8 +8,8 @@ from .event import (
 )
 from .data import DataHandler, HistoricCSVDataHandler
 from .strategy import Strategy
-from .portfolio import Portfolio
-from .execution import ExecutionHandler
+from .portfolio import Portfolio, NaivePortfolio
+from .execution import ExecutionHandler, SimulatedExecutionHandler
 
 __all__ = [
     "Event",
@@ -22,5 +22,8 @@ __all__ = [
     "HistoricCSVDataHandler",
     "Strategy",
     "Portfolio",
+    "NaivePortfolio",
     "ExecutionHandler",
+    "SimulatedExecutionHandler",
 ]
+
