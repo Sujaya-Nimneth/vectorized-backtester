@@ -7,7 +7,7 @@ from .event import (
     FillEvent,
 )
 from .data import DataHandler, HistoricCSVDataHandler
-from .strategy import Strategy
+from .strategy import Strategy, MovingAverageCrossover
 from .portfolio import Portfolio, NaivePortfolio
 from .execution import ExecutionHandler, SimulatedExecutionHandler
 from .vectorized import VectorizedBacktester
@@ -23,6 +23,7 @@ __all__ = [
     "DataHandler",
     "HistoricCSVDataHandler",
     "Strategy",
+    "MovingAverageCrossover",
     "Portfolio",
     "NaivePortfolio",
     "ExecutionHandler",
@@ -31,6 +32,7 @@ __all__ = [
     "calculate_performance_metrics",
     "plot_performance",
 ]
+
 
 
 
